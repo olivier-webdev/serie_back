@@ -109,45 +109,40 @@ router.post("/login", (req, res) => {
   const sqlVerifyMail =
     "Select idUser, password, verify, admin FROM users WHERE email=?";
   connection.query(sqlVerifyMail, [email], async (err, result) => {
-    if (err) throw err;
-    console.log({ result });
-    let isEmail;
-    if (result.length === 0) {
-      isEmail = { message: "Email et/ou mot de passe incorrects !" };
-      res.status(200).json(isEmail);
-    } else {
-      console.log("TEST1");
-      const dbPassword = result[0].password;
-      const passwordMatch = await bcrypt.compare(password, dbPassword);
-      if (passwordMatch) {
-        const token = jsonwebtoken.sign({}, key, {
-          subject: result[0].idUser.toString(),
-          expiresIn: 3600 * 2,
-          algorithm: "RS256",
-        });
-        console.log("TEST2");
-        if (result[0].verify == 1) {
-          console.log("TEST3");
-          isEmail = {
-            messageGood: "Connexion réussie ! Vous allez être redirigé(e)",
-            id: result[0].idUser,
-          };
-          res.cookie("token", token);
-          if (result[0].admin != 1) {
-            console.log("TEST4");
-            // res.cookie("token", token, { maxAge: 3600 * 2 * 1000 });
-          }
-          res.status(200).json(isEmail);
-        } else {
-          isEmail = {
-            message: "Vous n'avez pas validé votre inscription par mail !",
-          };
-          res.status(200).json(isEmail);
-        }
+    try {
+      if (result.length === 0) {
+        res.status(400).json("Email et/ou mot de passe incorrects !");
       } else {
-        isEmail = { message: "Email et/ou mot de passe incorrects !" };
-        res.status(200).json(isEmail);
+        const dbPassword = result[0].password;
+        const passwordMatch = bcrypt.compareSync(password, dbPassword);
+        if (passwordMatch) {
+          if (result[0].verify == 1) {
+            if (result[0].admin != 1) {
+              const token = jsonwebtoken.sign({}, key, {
+                subject: result[0].idUser.toString(),
+                expiresIn: 3600 * 24 * 30 * 6,
+                algorithm: "RS256",
+              });
+              res.cookie("token", token, {
+                maxAge: 3600 * 2 * 1000,
+                httpOnly: true,
+              });
+              console.log("token généré", token);
+              res.json(result[0]);
+            } else {
+              res.status(200).json(result[0]);
+            }
+          } else {
+            res
+              .status(400)
+              .json("Vous n'avez pas validé votre inscription par mail !");
+          }
+        } else {
+          res.status(400).json("Email et/ou mot de passe incorrects !");
+        }
       }
+    } catch (error) {
+      res.status(400).json("Email et/ou mot de passe incorrects !");
     }
   });
 });
@@ -160,7 +155,7 @@ router.get("/resetPassword/:email", (req, res) => {
     if (err) throw err;
     console.log({ result });
     if (result.length !== 0) {
-      const confirmLink = `http://localhost:3000/resetPassword?email=${email}`;
+      const confirmLink = `https://serie-front-olivier-webdev.vercel.app/resetPassword?email=${email}`;
       const mailOptions = {
         from: "olivier.dwwm@gmail.com",
         to: email,
@@ -242,7 +237,7 @@ router.post("/register", upload.single("avatar"), async (req, res) => {
         ],
         (err, result) => {
           if (err) throw err;
-          const confirmLink = `http://localhost:3000/confirmEmail?token=${emailToken}`;
+          const confirmLink = `https://serie-front-olivier-webdev.vercel.app/confirmEmail?token=${emailToken}`;
           const mailOptions = {
             from: "olivier.dwwm@gmail.com",
             to: email,
