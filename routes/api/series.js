@@ -1,5 +1,5 @@
 const router = require("express").Router();
-const connection = require("../../database");
+const pool = require("../../database");
 
 const multer = require("multer");
 const path = require("path");
