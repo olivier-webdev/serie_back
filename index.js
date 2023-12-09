@@ -15,10 +15,13 @@ require("./database");
 
 const routes = require("./routes");
 
+const allowedOrigin = "https://serie-front-olivier-webdev.vercel.app";
+
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Origin", allowedOrigin);
   res.header("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE, PATCH");
   res.header("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
   next();
 });
 
