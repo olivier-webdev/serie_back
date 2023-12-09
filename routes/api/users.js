@@ -118,22 +118,33 @@ router.get("/current", async (req, res) => {
 
 router.post("/login", (req, res) => {
   const { email, password } = req.body;
+  console.log(req.body);
   const sqlVerifyMail =
     "Select idUser, password, verify, admin FROM users WHERE email=?";
   pool
     .query(sqlVerifyMail, [email])
     .then(async (result) => {
+      console.log(result[0]);
       try {
-        if (result.length === 0) {
+        if (result[0].length === 0) {
+          console.log("No results");
           res.status(400).json("Email et/ou mot de passe incorrects !");
         } else {
-          const dbPassword = result[0].password;
-          const passwordMatch = bcrypt.compareSync(password, dbPassword);
+          console.log("Results OK");
+          console.log(result[0]);
+          const user = result[0][0];
+          const dbPassword = user.password;
+          console.log({ password });
+          console.log({ dbPassword });
+          const passwordMatch = await bcrypt.compare(password, dbPassword);
+          console.log({ passwordMatch });
           if (passwordMatch) {
-            if (result[0].verify == 1) {
-              if (result[0].admin != 1) {
+            console.log("Password Match");
+            if (user.verify == 1) {
+              if (user.admin != 1) {
+                console.log("I'm not an admin");
                 const token = jsonwebtoken.sign({}, key, {
-                  subject: result[0].idUser.toString(),
+                  subject: user.idUser.toString(),
                   expiresIn: 3600 * 24 * 30 * 6,
                   algorithm: "RS256",
                 });
@@ -142,20 +153,25 @@ router.post("/login", (req, res) => {
                   httpOnly: true,
                 });
                 console.log("token généré", token);
-                res.json(result[0]);
+                res.json(user);
               } else {
-                res.status(200).json(result[0]);
+                console.log("I'm an admin");
+
+                res.status(200).json(user);
               }
             } else {
+              console.log("Inscription non validée");
               res
                 .status(400)
                 .json("Vous n'avez pas validé votre inscription par mail !");
             }
           } else {
+            console.log("password didn't match");
             res.status(400).json("Email et/ou mot de passe incorrects !");
           }
         }
       } catch (error) {
+        console.log("There's an error", error);
         res.status(400).json("Email et/ou mot de passe incorrects !");
       }
     })
