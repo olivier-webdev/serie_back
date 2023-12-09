@@ -14,11 +14,33 @@ connection = mysql.createConnection({
   user: process.env.MYSQL_USER,
   password: process.env.MYSQL_PASSWORD,
   database: process.env.MYSQL_DB,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
 });
 
-connection.connect((err) => {
-  if (err) throw err;
-  console.log("connecté à la base de données");
+pool.getConnection((err, connection) => {
+  if (err) {
+    console.error("Error getting database connection:", err);
+    return;
+  }
+  console.log("Connected to the database");
+
+  connection.ping((pingErr) => {
+    connection.release();
+    if (pingErr) {
+      console.error("Error pinging database:", pingErr);
+    } else {
+      console.log("Database connection is active");
+    }
+  });
 });
 
-module.exports = connection;
+module.exports = pool.promise();
+
+// connection.connect((err) => {
+//   if (err) throw err;
+//   console.log("connecté à la base de données");
+// });
+
+// module.exports = connection;
