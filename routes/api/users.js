@@ -151,6 +151,8 @@ router.post("/login", (req, res) => {
                 res.cookie("token", token, {
                   maxAge: 3600 * 2 * 1000,
                   httpOnly: true,
+                  sameSite: "None",
+                  secure: true,
                 });
                 console.log("token généré", token);
                 res.json(user);
