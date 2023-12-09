@@ -1,5 +1,5 @@
 const router = require("express").Router();
-const connection = require("../../database");
+const pool = require("../../database");
 const crypto = require("crypto");
 const jsonwebtoken = require("jsonwebtoken");
 const { key, keyPub } = require("../../keys");
@@ -42,10 +42,15 @@ router.get("/getUser/:id", (req, res) => {
   let id = req.params.id;
   const sql =
     "SELECT idUser, pseudo, email, avatar, admin FROM users where idUser= ?";
-  connection.query(sql, [id], (err, result) => {
-    if (err) throw err;
-    res.status(200).json(result[0]);
-  });
+  pool
+    .query(sql, [id])
+    .then((result) => {
+      res.status(200).json(result[0]);
+    })
+    .catch((err) => {
+      console.error(err);
+      res.status(500).json({ messageError: "Internal Server Error" });
+    });
 });
 
 router.get("/verifyMail/:token", (req, res) => {
@@ -57,12 +62,10 @@ router.get("/verifyMail/:token", (req, res) => {
     .replace("T", " ");
   console.log(formattedDateVerify);
   const sqlVerifyMailToken = `SELECT * FROM users WHERE emailToken = ?  AND ? < expDate`;
-  connection.query(
-    sqlVerifyMailToken,
-    [token, formattedDateVerify],
-    (err, result) => {
+  pool
+    .query(sqlVerifyMailToken, [token, formattedDateVerify])
+    .then((result) => {
       console.log(result.length);
-      if (err) throw err;
       if (result.length === 0) {
         console.log("IF");
         res.status(200).json({ message: "Token invalide et/ou date expirée" });
@@ -70,13 +73,16 @@ router.get("/verifyMail/:token", (req, res) => {
         console.log("ELSE");
         const idUser = result[0].idUser;
         const updateUserAfterConfirm = `UPDATE users SET emailToken = null, verify= 1, expDate = null  WHERE idUser = ? `;
-        connection.query(updateUserAfterConfirm, [idUser], (err, result) => {
-          if (err) throw err;
-          res.status(200).json({ message: "Inscription validée" });
-        });
+        return pool.query(updateUserAfterConfirm, [idUser]);
       }
-    }
-  );
+    })
+    .then((result) => {
+      res.status(200).json({ message: "Inscription validée" });
+    })
+    .catch((err) => {
+      console.error(err);
+      res.status(500).json({ messageError: "Internal Server Error" });
+    });
 });
 
 router.get("/current", async (req, res) => {
@@ -88,14 +94,20 @@ router.get("/current", async (req, res) => {
         algorithms: "RS256",
       });
       const sql = `SELECT idUser, pseudo, email, avatar, admin from users WHERE idUser= ?`;
-      connection.query(sql, [decodedToken.sub], (err, result) => {
-        const currentUser = result[0];
-        if (currentUser) {
-          res.json(currentUser);
-        } else {
-          res.json(null);
-        }
-      });
+      pool
+        .query(sql, [decodedToken.sub])
+        .then((result) => {
+          const currentUser = result[0];
+          if (currentUser) {
+            res.json(currentUser);
+          } else {
+            res.json(null);
+          }
+        })
+        .catch((err) => {
+          console.error(err);
+          res.status(500).json({ messageError: "Internal Server Error" });
+        });
     } catch (error) {
       res.json(null);
     }
@@ -108,75 +120,85 @@ router.post("/login", (req, res) => {
   const { email, password } = req.body;
   const sqlVerifyMail =
     "Select idUser, password, verify, admin FROM users WHERE email=?";
-  connection.query(sqlVerifyMail, [email], async (err, result) => {
-    try {
-      if (result.length === 0) {
-        res.status(400).json("Email et/ou mot de passe incorrects !");
-      } else {
-        const dbPassword = result[0].password;
-        const passwordMatch = bcrypt.compareSync(password, dbPassword);
-        if (passwordMatch) {
-          if (result[0].verify == 1) {
-            if (result[0].admin != 1) {
-              const token = jsonwebtoken.sign({}, key, {
-                subject: result[0].idUser.toString(),
-                expiresIn: 3600 * 24 * 30 * 6,
-                algorithm: "RS256",
-              });
-              res.cookie("token", token, {
-                maxAge: 3600 * 2 * 1000,
-                httpOnly: true,
-              });
-              console.log("token généré", token);
-              res.json(result[0]);
+  pool
+    .query(sqlVerifyMail, [email])
+    .then(async (result) => {
+      try {
+        if (result.length === 0) {
+          res.status(400).json("Email et/ou mot de passe incorrects !");
+        } else {
+          const dbPassword = result[0].password;
+          const passwordMatch = bcrypt.compareSync(password, dbPassword);
+          if (passwordMatch) {
+            if (result[0].verify == 1) {
+              if (result[0].admin != 1) {
+                const token = jsonwebtoken.sign({}, key, {
+                  subject: result[0].idUser.toString(),
+                  expiresIn: 3600 * 24 * 30 * 6,
+                  algorithm: "RS256",
+                });
+                res.cookie("token", token, {
+                  maxAge: 3600 * 2 * 1000,
+                  httpOnly: true,
+                });
+                console.log("token généré", token);
+                res.json(result[0]);
+              } else {
+                res.status(200).json(result[0]);
+              }
             } else {
-              res.status(200).json(result[0]);
+              res
+                .status(400)
+                .json("Vous n'avez pas validé votre inscription par mail !");
             }
           } else {
-            res
-              .status(400)
-              .json("Vous n'avez pas validé votre inscription par mail !");
+            res.status(400).json("Email et/ou mot de passe incorrects !");
           }
-        } else {
-          res.status(400).json("Email et/ou mot de passe incorrects !");
         }
+      } catch (error) {
+        res.status(400).json("Email et/ou mot de passe incorrects !");
       }
-    } catch (error) {
-      res.status(400).json("Email et/ou mot de passe incorrects !");
-    }
-  });
+    })
+    .catch((err) => {
+      console.error(err);
+      res.status(500).json({ messageError: "Internal Server Error" });
+    });
 });
 
 router.get("/resetPassword/:email", (req, res) => {
   console.log(req.params.email);
   const email = req.params.email;
   const sqlSearchMail = `SELECT * FROM users WHERE email = ?`;
-  connection.query(sqlSearchMail, [email], (err, result) => {
-    if (err) throw err;
-    console.log({ result });
-    if (result.length !== 0) {
-      const confirmLink = `https://serie-front-olivier-webdev.vercel.app/resetPassword?email=${email}`;
-      const mailOptions = {
-        from: "olivier.dwwm@gmail.com",
-        to: email,
-        subject: "Mot de passe oublié Serie Blog",
-        text: `Cliquez sur ce lien pour modifier votre mot de passe : ${confirmLink}`,
-      };
-      transporter.sendMail(mailOptions, (err, info) => {
-        if (err) {
-          throw err;
-        } else {
-          res
-            .status(200)
-            .json({ messageGood: "Vous allez recevoir un mail !" });
-        }
-      });
-    } else {
-      res.json({
-        messageError: "Ce mail n'existe pas dans notre base de données",
-      });
-    }
-  });
+  pool
+    .query(sqlSearchMail, [email])
+    .then((result) => {
+      if (result.length !== 0) {
+        const confirmLink = `https://serie-front-olivier-webdev.vercel.app/resetPassword?email=${email}`;
+        const mailOptions = {
+          from: "olivier.dwwm@gmail.com",
+          to: email,
+          subject: "Mot de passe oublié Serie Blog",
+          text: `Cliquez sur ce lien pour modifier votre mot de passe : ${confirmLink}`,
+        };
+        transporter.sendMail(mailOptions, (err, info) => {
+          if (err) {
+            throw err;
+          } else {
+            res
+              .status(200)
+              .json({ messageGood: "Vous allez recevoir un mail !" });
+          }
+        });
+      } else {
+        res.json({
+          messageError: "Ce mail n'existe pas dans notre base de données",
+        });
+      }
+    })
+    .catch((err) => {
+      console.error(err);
+      res.status(500).json({ messageError: "Internal Server Error" });
+    });
 });
 
 router.post("/modifyPassword", async (req, res) => {
@@ -184,28 +206,35 @@ router.post("/modifyPassword", async (req, res) => {
   const { password, email } = req.body;
   const hashedPassword = await bcrypt.hash(password, 10);
   const sqlModifyPasswd = `UPDATE users SET password = ? WHERE email = ?`;
-  connection.query(sqlModifyPasswd, [hashedPassword, email], (err, result) => {
-    if (err) throw err;
-    res.json({ message: "Mot de passe modiifé, vous allez être redirigé !" });
-  });
+  pool
+    .query(sqlModifyPasswd, [hashedPassword, email])
+    .then((result) => {
+      res.json({ message: "Mot de passe modiifé, vous allez être redirigé !" });
+    })
+    .catch((err) => {
+      console.error(err);
+      res.status(500).json({ messageError: "Internal Server Error" });
+    });
 });
 
 router.post("/register", upload.single("avatar"), async (req, res) => {
-  console.log(req.body);
-  console.log(req.file);
-  let avatar;
-  if (req.file && req.file.filename) {
-    avatar = req.file.filename;
-  } else {
-    avatar = null;
-  }
-  const { username, email, password } = req.body;
-  let admin = 0;
-  let verify = 0;
-  const sqlVerify = "SELECT * FROM users WHERE email= ?";
-  const hashedPassword = await bcrypt.hash(password, 10);
-  connection.query(sqlVerify, [email], (err, result) => {
-    if (err) throw err;
+  try {
+    console.log(req.body);
+    console.log(req.file);
+    let avatar;
+    if (req.file && req.file.filename) {
+      avatar = req.file.filename;
+    } else {
+      avatar = null;
+    }
+    const { username, email, password } = req.body;
+    let admin = 0;
+    let verify = 0;
+
+    const [result] = await pool.query("SELECT * FROM users WHERE email= ?", [
+      email,
+    ]);
+
     if (result.length) {
       let isEmail = { message: "Email existant" };
       if (avatar) {
@@ -220,11 +249,14 @@ router.post("/register", upload.single("avatar"), async (req, res) => {
       res.status(200).json(isEmail);
     } else {
       let emailToken = crypto.randomBytes(64).toString("hex");
-      const sqlInsert = `INSERT INTO users
-         (pseudo, email, password, avatar, admin, verify, emailToken, expDate)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
-      connection.query(
-        sqlInsert,
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const formattedDate = new Date()
+        .toISOString()
+        .slice(0, 19)
+        .replace("T", " ");
+
+      const [insertResult] = await pool.query(
+        "INSERT INTO users (pseudo, email, password, avatar, admin, verify, emailToken, expDate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [
           username,
           email,
@@ -234,32 +266,29 @@ router.post("/register", upload.single("avatar"), async (req, res) => {
           verify,
           emailToken,
           formattedDate,
-        ],
-        (err, result) => {
-          if (err) throw err;
-          const confirmLink = `https://serie-front-olivier-webdev.vercel.app/confirmEmail?token=${emailToken}`;
-          const mailOptions = {
-            from: "olivier.dwwm@gmail.com",
-            to: email,
-            subject: "Confirmation inscription Serie Blog",
-            text: `Cliquez sur le lien suivant pour valider votre inscription : ${confirmLink}`,
-          };
-          transporter.sendMail(mailOptions, (err, info) => {
-            if (err) {
-              // console.error("Erreur lors de l'envoi du mail");
-              throw err;
-            } else {
-              let isEmail = {
-                messageGood:
-                  "Inscription à confirmer par email ! Vous allez être redirigé(e)",
-              };
-              res.status(200).json(isEmail);
-            }
-          });
-        }
+        ]
       );
+
+      const confirmLink = `https://serie-front-olivier-webdev.vercel.app/confirmEmail?token=${emailToken}`;
+      const mailOptions = {
+        from: "olivier.dwwm@gmail.com",
+        to: email,
+        subject: "Confirmation inscription Serie Blog",
+        text: `Cliquez sur le lien suivant pour valider votre inscription : ${confirmLink}`,
+      };
+
+      await transporter.sendMail(mailOptions);
+
+      let isEmail = {
+        messageGood:
+          "Inscription à confirmer par email ! Vous allez être redirigé(e)",
+      };
+      res.status(200).json(isEmail);
     }
-  });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ messageError: "Internal Server Error" });
+  }
 });
 
 router.delete("/", (req, res) => {
