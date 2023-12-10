@@ -312,13 +312,16 @@ router.post("/register", upload.single("avatar"), async (req, res) => {
 });
 
 router.delete("/", (req, res) => {
-  res.clearCookie("token", {
-    domain: ".vercel.app", // Ajoutez le domaine parent (avec le point) pour inclure tous les sous-domaines de Vercel
-    path: "/",
-    secure: true, // Assurez-vous que secure est défini car votre front-end est en HTTPS
-    httpOnly: true, // Il est recommandé de définir httpOnly
-    sameSite: "None", // Pour autoriser les requêtes cross-site
-  });
+  res.clearCookie(
+    "token"
+    // , {
+    //   domain: ".vercel.app",
+    //   path: "/",
+    //   secure: true,
+    //   httpOnly: true,
+    //   sameSite: "None",
+    // }
+  );
   res.end();
 });
 
