@@ -153,8 +153,8 @@ router.post("/login", (req, res) => {
                   httpOnly: true,
                   sameSite: "None",
                   secure: true,
-                  domain: "serie-front-olivier-webdev.vercel.app",
-                  path: "/",
+                  // domain: "serie-front-olivier-webdev.vercel.app",
+                  // path: "/",
                 });
                 console.log("token généré", token);
                 res.json(user);
@@ -312,7 +312,7 @@ router.post("/register", upload.single("avatar"), async (req, res) => {
 });
 
 router.delete("/", (req, res) => {
-  res.clearCookie("token", { domain: "serie-front-olivier-webdev.vercel.app" });
+  res.clearCookie("token");
   res.end();
 });
 
