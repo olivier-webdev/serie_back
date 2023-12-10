@@ -153,7 +153,8 @@ router.post("/login", (req, res) => {
                   httpOnly: true,
                   sameSite: "None",
                   secure: true,
-                  // domain: "serie-front-olivier-webdev.vercel.app",
+                  domain: "serie-front-olivier-webdev.vercel.app",
+                  path: "/",
                 });
                 console.log("token généré", token);
                 res.json(user);
