@@ -145,7 +145,7 @@ router.post("/login", (req, res) => {
                 console.log("I'm not an admin");
                 const token = jsonwebtoken.sign({}, key, {
                   subject: user.idUser.toString(),
-                  expiresIn: 3600 * 24 * 30 * 6,
+                  expiresIn: 3600 * 2,
                   algorithm: "RS256",
                 });
                 res.cookie("token", token, {
